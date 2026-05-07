@@ -26,6 +26,13 @@ st.sidebar.markdown(
 )
 total_hours = st.sidebar.number_input("Total Study Hours Available", min_value=100, max_value=5000, value=1500, step=100)
 
+st.sidebar.header("⏩ Study Efficiency")
+lec_speed = st.sidebar.select_slider(
+    "Lecture Watch Speed",
+    options=[1.0, 1.25, 1.5, 1.75, 2.0],
+    value=1.5
+)
+
 st.sidebar.header("🎯 Optimization Goal")
 opt_mode = st.sidebar.radio(
     "Choose your strategy:",
@@ -34,7 +41,7 @@ opt_mode = st.sidebar.radio(
 
 target_marks = None
 if opt_mode == "Minimize Effort to reach Target Rank":
-    st.sidebar.markdown("Targeting AIR 2000 usually means getting around 150-160 marks (depending on the year).")
+    st.sidebar.markdown("Targeting AIR 2000 usually means getting around 150-160 marks.")
     target_marks = st.sidebar.number_input("Target Marks", min_value=50, max_value=360, value=160, step=10)
 else:
     st.sidebar.markdown("We will maximize your expected marks for the time you have.")
@@ -60,7 +67,6 @@ with tab1:
             
     with col2:
         st.subheader("Chemistry")
-        st.markdown("*Note: You mentioned 11th Chem backlog, so keep these low if needed.*")
         for topic in df[df['subject'] == 'Chemistry']['topic']:
             val = st.slider(topic, 0, 100, int(st.session_state.proficiencies[topic]*100), key=f"chem_{topic}")
             st.session_state.proficiencies[topic] = val / 100.0
@@ -76,7 +82,7 @@ with tab2:
     
     if st.button("🚀 Generate Optimized Plan", type="primary"):
         with st.spinner("Solving MILP Optimization..."):
-            res = optimize_study_plan(total_hours, st.session_state.proficiencies, target_marks=target_marks)
+            res = optimize_study_plan(total_hours, st.session_state.proficiencies, target_marks=target_marks, lecture_speed=lec_speed)
             
         if res['status'] != "Optimal":
             st.error("Could not find an optimal solution. Try increasing your available time.")

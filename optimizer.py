@@ -2,17 +2,10 @@ import pulp
 import pandas as pd
 from dataset import get_jee_dataset
 
-def optimize_study_plan(total_hours_available, user_proficiencies, target_marks=None):
+def optimize_study_plan(total_hours_available, user_proficiencies, target_marks=None, lecture_speed=1.0):
     """
     Solves the Knapsack/MILP problem to maximize marks within total_hours_available.
-    
-    Args:
-        total_hours_available (float): Total study hours available.
-        user_proficiencies (dict): Mapping of topic -> proficiency (0 to 1).
-        target_marks (float, optional): If provided, it can act as a constraint or just be ignored if maximizing marks is the goal.
-        
-    Returns:
-        dict: containing the optimal plan and stats.
+    - cost = (Lecture_Hours / Speed) + Practice_Hours (where Practice = Lecture)
     """
     df = get_jee_dataset()
     topics = df['topic'].tolist()
@@ -28,7 +21,13 @@ def optimize_study_plan(total_hours_available, user_proficiencies, target_marks=
         for idx, row in df.iterrows():
             topic = row['topic']
             p = user_proficiencies.get(topic, 0.0)
-            costs[topic] = (1 - 0.8 * p) * row['avg_hours_to_master']
+            
+            # Remaining hours calculation
+            # Cost = (Lec / Speed) + Practice
+            rem_lec = row['lecture_hours'] * (1 - p)
+            rem_prac = row['lecture_hours'] * (1 - p) # 1:1 rule
+            costs[topic] = (rem_lec / lecture_speed) + rem_prac
+            
             values[topic] = row['doable_marks'] # Use 75% doable marks
             
         # Objective function: Minimize total time
@@ -48,8 +47,12 @@ def optimize_study_plan(total_hours_available, user_proficiencies, target_marks=
         for idx, row in df.iterrows():
             topic = row['topic']
             p = user_proficiencies.get(topic, 0.0)
-            costs[topic] = (1 - 0.8 * p) * row['avg_hours_to_master']
-            values[topic] = row['doable_marks'] # Use 75% doable marks
+            
+            rem_lec = row['lecture_hours'] * (1 - p)
+            rem_prac = row['lecture_hours'] * (1 - p)
+            costs[topic] = (rem_lec / lecture_speed) + rem_prac
+            
+            values[topic] = row['doable_marks']
             
         # Objective function: Maximize total marks
         prob += pulp.lpSum([values[t] * y[t] for t in topics]), "Total Expected Marks"
