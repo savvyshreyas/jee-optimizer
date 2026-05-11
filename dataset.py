@@ -98,5 +98,6 @@ def get_jee_dataset():
     
     df = pd.DataFrame(data)
     df['avg_hours_to_master'] = df['lecture_hours'] * 2
-    df['doable_marks'] = df['weightage'] * 0.75
+    # Realistic Calibration: (Questions / 16 years) * 3 marks per question * 0.75 cap
+    df['doable_marks'] = df['weightage'] * 0.14
     return df
