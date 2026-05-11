@@ -5,11 +5,19 @@ from dataset import get_jee_dataset
 def optimize_study_plan(total_hours_available, user_proficiencies, target_marks=None, lecture_speed=1.0):
     """
     Solves the Knapsack/MILP problem to maximize marks within total_hours_available.
-    - cost = (Lecture_Hours / Speed) + Practice_Hours (where Practice = Lecture)
     """
     df = get_jee_dataset()
     topics = df['topic'].tolist()
     
+    # SANITIZATION: Ensure all proficiencies are floats and match topic names
+    clean_prof = {}
+    for t in topics:
+        val = user_proficiencies.get(t, 0.0)
+        try:
+            clean_prof[t] = float(val)
+        except:
+            clean_prof[t] = 0.0
+            
     # Subject Difficulty Multipliers
     subj_multipliers = {"Mathematics": 1.5, "Physics": 1.2, "Chemistry": 1.0}
     
@@ -23,7 +31,7 @@ def optimize_study_plan(total_hours_available, user_proficiencies, target_marks=
         values = {}
         for idx, row in df.iterrows():
             topic = row['topic']
-            p = user_proficiencies.get(topic, 0.0)
+            p = clean_prof[topic]
             
             # THE FORMULA: (Lec / Speed) + (Practice * Multiplier)
             multiplier = subj_multipliers.get(row['subject'], 1.0)
@@ -55,7 +63,7 @@ def optimize_study_plan(total_hours_available, user_proficiencies, target_marks=
         values = {}
         for idx, row in df.iterrows():
             topic = row['topic']
-            p = user_proficiencies.get(topic, 0.0)
+            p = clean_prof[topic]
             
             multiplier = subj_multipliers.get(row['subject'], 1.0)
             rem_lec = row['lecture_hours'] * (1 - p)
@@ -123,7 +131,7 @@ def optimize_study_plan(total_hours_available, user_proficiencies, target_marks=
         t_clean = t.strip()
         if t in final_selection_orig:
             row = topic_map_norm[t.strip().lower()]
-            p = user_proficiencies.get(t, 0.0)
+            p = clean_prof.get(t, 0.0)
             multiplier = subj_multipliers.get(row['subject'], 1.0)
             rem_lec = row['lecture_hours'] * (1 - p)
             rem_prac = row['lecture_hours'] * (1 - p)
@@ -146,7 +154,7 @@ def optimize_study_plan(total_hours_available, user_proficiencies, target_marks=
     for t in topics:
         if t not in final_selection_orig:
             row = topic_map_norm[t.strip().lower()]
-            p = user_proficiencies.get(t, 0.0)
+            p = clean_prof.get(t, 0.0)
             multiplier = subj_multipliers.get(row['subject'], 1.0)
             rem_lec = row['lecture_hours'] * (1 - p)
             rem_prac = row['lecture_hours'] * (1 - p)
