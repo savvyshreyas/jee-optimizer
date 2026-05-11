@@ -150,6 +150,8 @@ else:
 
     # 4. Interactive Data Editor
     st.subheader("Unified Strategy Table")
+    st.markdown("_Select your chapters below and click 'Calculate Selected Strategy' at the bottom to update metrics._")
+    
     edited_output = st.data_editor(
         display_df,
         column_config={
@@ -161,18 +163,19 @@ else:
         disabled=["Subject", "Chapter", "Lec Hours", "Net Study Hours", "Questions (16yr)", "Exp. Marks", "Prerequisites"],
         hide_index=True,
         use_container_width=True,
-        key="sandbox_editor_v2"
+        key="sandbox_editor_v3"
     )
     
-    # Update the selection set based on the editor's output
-    # This ensures that even after a rerun, the checkboxes stay checked
-    new_selection = set(edited_output[edited_output['Select']]['Chapter'])
-    if new_selection != st.session_state.manual_selection_set:
+    # 5. Manual Update Button (Batch Mode)
+    if st.button("📊 Calculate Selected Strategy", type="primary"):
+        new_selection = set(edited_output[edited_output['Select']]['Chapter'])
         st.session_state.manual_selection_set = new_selection
-        st.rerun() # Single clean rerun to sync metrics
+        st.success("Strategy Updated!")
+        st.rerun()
+
+    # 6. Summary Display (Only shows what's in the locked session_state)
+    selected_data = current_df[current_df['topic'].isin(st.session_state.manual_selection_set)]
     
-    # 5. Real-time Summary
-    selected_data = edited_output[edited_output['Select']]
     total_h = selected_data['Net Study Hours'].sum()
     total_m = selected_data['Exp. Marks'].sum()
     
@@ -184,7 +187,8 @@ else:
     
     if len(st.session_state.manual_selection_set) > 0:
         with st.expander("🔍 View Selected Sub-Totals by Subject"):
-            subject_summary = selected_data.groupby('Subject')[['Net Study Hours', 'Exp. Marks']].sum()
+            # Prepare subject summary from the locked selection
+            subject_summary = selected_data.groupby('subject')[['Net Study Hours', 'Exp. Marks']].sum()
             st.table(subject_summary)
     else:
-        st.info("Select chapters from the table to see your customized roadmap summary.")
+        st.info("Select chapters from the table and click 'Calculate Selected Strategy' to see your customized roadmap summary.")
