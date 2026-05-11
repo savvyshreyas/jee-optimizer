@@ -1,8 +1,25 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import json
+import os
 from dataset import get_jee_dataset
 from optimizer import optimize_study_plan
+
+USER_DATA_FILE = "user_data.json"
+
+def save_data(data):
+    with open(USER_DATA_FILE, "w") as f:
+        json.dump(data, f)
+
+def load_data():
+    if os.path.exists(USER_DATA_FILE):
+        try:
+            with open(USER_DATA_FILE, "r") as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
 
 st.set_page_config(page_title="JEE Advanced Optimizer", layout="wide")
 
@@ -10,9 +27,9 @@ st.title("🚀 JEE Advanced Preparation Optimizer")
 st.markdown("""
 **Deep-Tech Strategy for AIR 2000.** 
 Refined with **IITK Saathee** analysis principles:
-- **75% Rule**: 25% of Advanced questions are designed to be "undoable" under pressure. We cap expected marks at 75% per topic.
-- **Difficulty Hierarchy**: Math (1.5x effort) > Physics (1.2x effort) > Chemistry (1.0x effort).
-- **Target AIR 2000**: Mathematically optimized to find the path of least resistance.
+- ✅ **Prerequisite Logic Enabled**: Topics are now sequenced logically.
+- ✅ **75% Rule**: 25% of Advanced questions are designed to be "undoable".
+- ✅ **Difficulty Hierarchy**: Math (1.5x) > Physics (1.2x) > Chemistry (1.0x).
 """)
 
 # Load dataset
@@ -51,7 +68,8 @@ tab1, tab2 = st.tabs(["📝 Input Proficiency", "🧠 AI Optimized Plan"])
 
 # State for proficiencies
 if 'proficiencies' not in st.session_state:
-    st.session_state.proficiencies = {topic: 0.0 for topic in df['topic']}
+    stored_data = load_data()
+    st.session_state.proficiencies = {topic: stored_data.get(topic, 0.0) for topic in df['topic']}
 
 with tab1:
     st.header("Assess Your Current State")
@@ -81,6 +99,9 @@ with tab2:
     st.header("Your Deep-Tech Study Plan")
     
     if st.button("🚀 Generate Optimized Plan", type="primary"):
+        # Save current state before generating
+        save_data(st.session_state.proficiencies)
+        
         with st.spinner("Solving MILP Optimization..."):
             res = optimize_study_plan(total_hours, st.session_state.proficiencies, target_marks=target_marks, lecture_speed=lec_speed)
             
@@ -98,7 +119,7 @@ with tab2:
             with col2:
                 st.subheader("Time Allocation by Subject")
                 if not res['study_plan'].empty:
-                    fig = px.pie(res['study_plan'], values='Hours_Allocated', names='Subject', hole=0.3)
+                    fig = px.pie(res['study_plan'], values='Hours', names='Subject', hole=0.3)
                     st.plotly_chart(fig, use_container_width=True)
                     
             st.markdown("---")
