@@ -111,44 +111,44 @@ if page == "🧠 AI Optimizer":
 
 else:
     st.title("🛠️ Manual Study Sandbox")
-    st.markdown("Cherry-pick your chapters. The **'Net Study Hours'** column uses the speed and difficulty formulas automatically.")
+    st.markdown("Cherry-pick your chapters. Calculations are now **stabilized** and lag-free.")
     
-    # 1. Prepare the Unified Data
-    sandbox_df = df.copy()
-    sandbox_df['Multiplier'] = sandbox_df['subject'].map(subj_multipliers)
-    
+    # 1. Prepare/Cache the Base Data
+    if 'base_sandbox_df' not in st.session_state:
+        sandbox_df = df.copy()
+        sandbox_df['Multiplier'] = sandbox_df['subject'].map(subj_multipliers)
+        st.session_state.base_sandbox_df = sandbox_df
+
+    # 2. Calculate personalized hours (Dynamic to speed and proficiency)
+    # We do this every time to keep it live, but we optimize the df merge
+    current_df = st.session_state.base_sandbox_df.copy()
     personalized_hours = []
-    for idx, row in sandbox_df.iterrows():
+    for idx, row in current_df.iterrows():
         p = st.session_state.proficiencies.get(row['topic'], 0.0)
         rem_lec = row['lecture_hours'] * (1 - p)
         rem_prac = row['lecture_hours'] * (1 - p)
         cost = (rem_lec / lec_speed) + (rem_prac * row['Multiplier'])
         personalized_hours.append(round(cost, 1))
     
-    sandbox_df['Net Study Hours'] = personalized_hours
-    sandbox_df['Exp. Marks'] = sandbox_df['doable_marks'].round(1)
+    current_df['Net Study Hours'] = personalized_hours
+    current_df['Exp. Marks'] = current_df['doable_marks'].round(1)
     
-    # Merge with selection state
-    if 'manual_selection' not in st.session_state:
-        st.session_state.manual_selection = pd.DataFrame({'topic': df['topic'], 'Select': False})
+    # 3. Handle Selection State (The "Glitches" Fix)
+    if 'manual_selection_set' not in st.session_state:
+        st.session_state.manual_selection_set = set()
+
+    # Create the display DF with checkboxes reflecting the set
+    current_df.insert(0, 'Select', [t in st.session_state.manual_selection_set for t in current_df['topic']])
     
-    unified_df = pd.merge(st.session_state.manual_selection, sandbox_df, on='topic')
-    
-    # Formatting for display
-    display_df = unified_df[[
+    display_df = current_df[[
         'Select', 'subject', 'topic', 'lecture_hours', 'Net Study Hours', 
         'weightage', 'Exp. Marks', 'prerequisites'
-    ]].copy()
-    
-    display_df.rename(columns={
-        'subject': 'Subject',
-        'topic': 'Chapter',
-        'lecture_hours': 'Lec Hours',
-        'weightage': 'Questions (16yr)',
-        'prerequisites': 'Prerequisites'
-    }, inplace=True)
+    ]].rename(columns={
+        'subject': 'Subject', 'topic': 'Chapter', 'lecture_hours': 'Lec Hours',
+        'weightage': 'Questions (16yr)', 'prerequisites': 'Prerequisites'
+    })
 
-    # 2. Interactive Data Editor
+    # 4. Interactive Data Editor
     st.subheader("Unified Strategy Table")
     edited_output = st.data_editor(
         display_df,
@@ -161,26 +161,28 @@ else:
         disabled=["Subject", "Chapter", "Lec Hours", "Net Study Hours", "Questions (16yr)", "Exp. Marks", "Prerequisites"],
         hide_index=True,
         use_container_width=True,
-        key="sandbox_editor"
+        key="sandbox_editor_v2"
     )
     
-    # 3. Real-time Summary
-    # Sync the selection back to session state
-    st.session_state.manual_selection = edited_output[['Chapter', 'Select']].rename(columns={'Chapter': 'topic'})
+    # Update the selection set based on the editor's output
+    # This ensures that even after a rerun, the checkboxes stay checked
+    new_selection = set(edited_output[edited_output['Select']]['Chapter'])
+    if new_selection != st.session_state.manual_selection_set:
+        st.session_state.manual_selection_set = new_selection
+        st.rerun() # Single clean rerun to sync metrics
     
-    selected_topics = edited_output[edited_output['Select']]['Chapter'].tolist()
-    selected_data = display_df[display_df['Chapter'].isin(selected_topics)]
-    
+    # 5. Real-time Summary
+    selected_data = edited_output[edited_output['Select']]
     total_h = selected_data['Net Study Hours'].sum()
     total_m = selected_data['Exp. Marks'].sum()
     
     st.markdown("---")
     c1, c2, c3 = st.columns(3)
-    c1.metric("Selected Chapters", len(selected_topics))
+    c1.metric("Selected Chapters", len(st.session_state.manual_selection_set))
     c2.metric("Total Time Required", f"{total_h:.1f} hours")
     c3.metric("Expected Total Marks", f"{total_m:.1f}")
     
-    if len(selected_topics) > 0:
+    if len(st.session_state.manual_selection_set) > 0:
         with st.expander("🔍 View Selected Sub-Totals by Subject"):
             subject_summary = selected_data.groupby('Subject')[['Net Study Hours', 'Exp. Marks']].sum()
             st.table(subject_summary)
