@@ -111,13 +111,12 @@ if page == "🧠 AI Optimizer":
 
 else:
     st.title("🛠️ Manual Study Sandbox")
-    st.markdown("Cherry-pick the chapters you want to study and see the real-time cost and mark projections.")
+    st.markdown("Cherry-pick your chapters. The **'Net Study Hours'** column uses the speed and difficulty formulas automatically.")
     
-    # Calculate costs for all chapters based on current settings
+    # 1. Prepare the Unified Data
     sandbox_df = df.copy()
     sandbox_df['Multiplier'] = sandbox_df['subject'].map(subj_multipliers)
     
-    # Calculate personalized hours
     personalized_hours = []
     for idx, row in sandbox_df.iterrows():
         p = st.session_state.proficiencies.get(row['topic'], 0.0)
@@ -126,40 +125,64 @@ else:
         cost = (rem_lec / lec_speed) + (rem_prac * row['Multiplier'])
         personalized_hours.append(round(cost, 1))
     
-    sandbox_df['My Hours'] = personalized_hours
-    sandbox_df['My Marks'] = sandbox_df['doable_marks']
+    sandbox_df['Net Study Hours'] = personalized_hours
+    sandbox_df['Exp. Marks'] = sandbox_df['doable_marks'].round(1)
     
-    # Show the table with selection
-    st.subheader("Interactive Syllabus")
-    # Initialize selection state
+    # Merge with selection state
     if 'manual_selection' not in st.session_state:
         st.session_state.manual_selection = pd.DataFrame({'topic': df['topic'], 'Select': False})
     
-    edited_df = st.data_editor(
-        st.session_state.manual_selection,
-        column_config={"Select": st.column_config.CheckboxColumn(required=True)},
-        disabled=["topic"],
+    unified_df = pd.merge(st.session_state.manual_selection, sandbox_df, on='topic')
+    
+    # Formatting for display
+    display_df = unified_df[[
+        'Select', 'subject', 'topic', 'lecture_hours', 'Net Study Hours', 
+        'weightage', 'Exp. Marks', 'prerequisites'
+    ]].copy()
+    
+    display_df.rename(columns={
+        'subject': 'Subject',
+        'topic': 'Chapter',
+        'lecture_hours': 'Lec Hours',
+        'weightage': 'Questions (16yr)',
+        'prerequisites': 'Prerequisites'
+    }, inplace=True)
+
+    # 2. Interactive Data Editor
+    st.subheader("Unified Strategy Table")
+    edited_output = st.data_editor(
+        display_df,
+        column_config={
+            "Select": st.column_config.CheckboxColumn(required=True),
+            "Lec Hours": st.column_config.NumberColumn(format="%.1f h"),
+            "Net Study Hours": st.column_config.NumberColumn(format="%.1f h"),
+            "Prerequisites": st.column_config.ListColumn()
+        },
+        disabled=["Subject", "Chapter", "Lec Hours", "Net Study Hours", "Questions (16yr)", "Exp. Marks", "Prerequisites"],
         hide_index=True,
         use_container_width=True,
-        key="editor"
+        key="sandbox_editor"
     )
     
-    # Calculate Real-time Summary
-    selected_topics = edited_df[edited_df['Select']]['topic'].tolist()
+    # 3. Real-time Summary
+    # Sync the selection back to session state
+    st.session_state.manual_selection = edited_output[['Chapter', 'Select']].rename(columns={'Chapter': 'topic'})
     
-    # Final Metrics
-    selected_data = sandbox_df[sandbox_df['topic'].isin(selected_topics)]
-    total_h = selected_data['My Hours'].sum()
-    total_m = selected_data['My Marks'].sum()
+    selected_topics = edited_output[edited_output['Select']]['Chapter'].tolist()
+    selected_data = display_df[display_df['Chapter'].isin(selected_topics)]
+    
+    total_h = selected_data['Net Study Hours'].sum()
+    total_m = selected_data['Exp. Marks'].sum()
     
     st.markdown("---")
     c1, c2, c3 = st.columns(3)
     c1.metric("Selected Chapters", len(selected_topics))
-    c2.metric("Total Hours Required", f"{total_h:.1f}h")
+    c2.metric("Total Time Required", f"{total_h:.1f} hours")
     c3.metric("Expected Total Marks", f"{total_m:.1f}")
     
     if len(selected_topics) > 0:
-        st.subheader("Your Custom Selection Details")
-        st.dataframe(selected_data[['subject', 'topic', 'lecture_hours', 'My Hours', 'My Marks']], use_container_width=True)
+        with st.expander("🔍 View Selected Sub-Totals by Subject"):
+            subject_summary = selected_data.groupby('Subject')[['Net Study Hours', 'Exp. Marks']].sum()
+            st.table(subject_summary)
     else:
-        st.info("Select chapters from the table above to see your customized plan summary.")
+        st.info("Select chapters from the table to see your customized roadmap summary.")
